@@ -1,0 +1,49 @@
+Screen {
+    layout: grid;
+    grid-size: 3;
+    grid-columns: 1fr 1fr 1fr;
+    grid-rows: 30% 5% 65%;
+    background: $background 50%;
+}
+
+#results {
+    width: 100%;
+    height: auto;
+}
+
+.header {
+    color: orange;
+    margin: 1 0 1 0;
+}
+
+#congress-label {
+    margin: 1 0 1 4;
+}
+
+#status-progress {
+    column-span: 3;
+    margin: 1 0 1 0
+}
+
+#results-container {
+    column-span: 3;
+    background: $background 50%;
+    margin: 0 0 1 0;
+    height: 100%;
+    overflow: hidden auto;
+    border: tall $background;
+}
+
+#results-container:focus {
+    border: tall $accent;
+}
+
+#congress-list {
+    margin: 0 0 0 4;
+}
+
+OptionList {
+    width: 70%;
+    height: 70%;
+    background: $background 50%;
+}
