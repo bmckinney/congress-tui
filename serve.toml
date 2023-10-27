@@ -1,0 +1,2 @@
+[app.congress-tui]
+command = "poetry run congress-tui"

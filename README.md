@@ -14,13 +14,21 @@ Blog announcement: https://blogs.loc.gov/law/2022/09/introducing-the-congress-go
 This app uses a demo API key that has various limitations. You can sign up for your own key here: https://api.congress.gov/sign-up/
 and set an environment variable `GOV_API_KEY` to that value before running the app.
 
-## Textualize
+## Textual
 
 This is written in python using [Texutalize](https://www.textualize.io/)
 
 GitHub: https://github.com/Textualize/textual/tree/main
 
 Changelog Interview: https://changelog.com/podcast/511
+
+### Textual-Web
+
+Textual recently launched a tool in beta that allows you to publish your TUI apps on the web.
+
+See: https://github.com/textualize/textual-web
+
+Once you have installed it, you can run `textual-web --config serve.toml` to create a browser instance.
 
 ## Installation
 Requires Python 3.8+
@@ -49,6 +57,13 @@ $ poetry run congress-tui
 - custom links (e.g.: from sponsor to member details)
 - add tests
 
-## More Info
+## Other TUI Libraries
+
+- [ratatui](https://github.com/ratatui-org/ratatui) (rust)
+- [bubbletea](https://github.com/charmbracelet/bubbletea) (golang)
+- [pterm](https://github.com/pterm/pterm) (golang)
+
+## Additional Information
 
 - [List of projects that provide TUIs](https://github.com/rothgar/awesome-tuis)
+- [Textualize App Gallery]()
