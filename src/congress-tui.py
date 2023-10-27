@@ -11,14 +11,8 @@ except ImportError:
 from textual import work
 from textual.app import App, ComposeResult
 from textual.containers import VerticalScroll, Vertical
-from textual.widgets import Input, Markdown, Footer, DataTable, Header, OptionList, Label, LoadingIndicator
+from textual.widgets import Markdown, Footer, DataTable, Header, OptionList, Label, LoadingIndicator
 from textual.binding import Binding
-
-CONGRESS_LIST = """114
-115
-116
-117
-118""".splitlines()
 
 
 class CongressTui(App):
@@ -51,23 +45,13 @@ class CongressTui(App):
             yield Label(f"Congress: {self.current_congress}",
                         classes='header',
                         id='congress-label')
-            yield OptionList(
-                "114",
-                "115",
-                "116",
-                "117",
-                "118",
-                id="congress-list"
-            )
+            yield OptionList("114", "115", "116", "117", "118", id="congress-list")
 
         with Vertical():
             yield Label(f"Bill Type: {self.current_bill_type}",
                         classes='header',
                         id='bill-type-label')
-            yield OptionList(
-                "hr", "s", "sjres", "hjres", "hconres", "sconres", "hres", "sres",
-                id="type-list"
-            )
+            yield OptionList("hr", "s", "sjres", "hjres", "hconres", "sconres", "hres", "sres", id="type-list")
 
         with Vertical():
             yield Label(f"Bill Number: {self.current_bill_num}",
@@ -93,6 +77,19 @@ class CongressTui(App):
         # default to the most recent congress and do search
         self.query_one("#congress-list", OptionList).action_last()
         self.query_one("#congress-list", OptionList).action_select()
+
+    async def on_markdown_link_clicked(self, event: Markdown.LinkClicked) -> None:
+        # show progress
+        self.query_one("#status-progress", LoadingIndicator).visible = True
+        url = event.href
+        results = await self.fetch_results(url)
+        # update view
+        # todo: parse url to determine type
+        if results is not None:
+            markdown = await self.make_bill_markdown(results)
+            await self.query_one("#results", Markdown).update(markdown)
+        # hide progress
+        self.query_one("#status-progress", LoadingIndicator).visible = False
 
     async def on_option_list_option_selected(self, message: OptionList.OptionSelected) -> None:
 
@@ -120,48 +117,63 @@ class CongressTui(App):
         num_list.clear_options()
         self.current_bill_num = None
 
-    async def on_input_changed(self, message: Input.Changed) -> None:
-        self.console.print("INPUT CHANGED")
-
-        """A coroutine to handle a text changed message."""
-        if message.input.id == 'bill-num':
-            if message.value:
-                self.current_bill_num = message.value
-                self.make_api_call()
-            else:
-                # Clear the results
-                await self.query_one("#results", Markdown).update("")
-
     @work(exclusive=True)
     async def make_api_call(self) -> None:
+
+        url = f"https://api.congress.gov/v3/{self.current_content_type}"
 
         # show progress
         self.query_one("#status-progress", LoadingIndicator).visible = True
 
-        url = f"https://api.congress.gov/v3/{self.current_content_type}"
-
         # BILL
         if self.current_content_type == "bill":
-            # construct url
+            # construct url based on option list selections
             url += f"/{self.current_congress}"
             if self.current_bill_type is not None:
                 url += f"/{self.current_bill_type}"
                 if self.current_bill_num is not None:
                     url += f"/{self.current_bill_num}"
-            url += f"?format=json&api_key={self.GOV_API_KEY}"
             # make http call
-            async with httpx.AsyncClient(timeout=None) as client:
-                response = await client.get(url)
-                try:
-                    results = response.json()
-                except httpx.HTTPError as exc:
-                    print(f"Error while requesting {exc.request.url!r}.")
+            results = await self.fetch_results(url)
             # update view
-            markdown = self.make_bill_markdown(results)
-            await self.query_one("#results", Markdown).update(markdown)
+            if results is not None:
+                markdown = await self.make_bill_markdown(results)
+                await self.query_one("#results", Markdown).update(markdown)
 
-            # hide progress
-            self.query_one("#status-progress", LoadingIndicator).visible = False
+        # hide progress
+        self.query_one("#status-progress", LoadingIndicator).visible = False
+
+    async def fetch_results(self, url: str) -> any:
+        results = None
+        url += f"?format=json&api_key={self.GOV_API_KEY}"
+
+        async with httpx.AsyncClient(timeout=None) as client:
+            response = await client.get(url)
+            try:
+                results = response.json()
+            except httpx.HTTPError as exc:
+                print(f"Error while requesting {exc.request.url!r}.")
+        return results
+
+    async def fetch_cosponsor_markdown(self, url: str, lines: []):
+        results = await self.fetch_results(url)
+        if results is not None:
+            lines.append("")
+            for cosponsor in results['cosponsors']:
+                lines.append(f"- {cosponsor['fullName']}")
+
+    async def fetch_subjects_markdown(self, url: str, lines: []):
+        results = await self.fetch_results(url)
+        if results is not None:
+            lines.append("")
+            if results.get('subjects').get('legislativeSubjects') is not None:
+                if results['subjects']['legislativeSubjects']:
+                    lines.append("Legislative Subjects:")
+                    lines.append("")
+                    for leg_subj in results['subjects']['legislativeSubjects']:
+                        lines.append(f"- {leg_subj['name']}")
+            if results.get('subjects').get('policyArea') is not None:
+                lines.append(f"Policy Area: {results['subjects']['policyArea']['name']}")
 
     def load_results_table(self, results: any):
         if isinstance(results['bills'], list):
@@ -169,7 +181,7 @@ class CongressTui(App):
                 table = self.query_one(DataTable)
                 table.add_row(result['number'], result['title'])
 
-    def make_bill_markdown(self, results: any) -> str:
+    async def make_bill_markdown(self, results: any) -> str:
         """Convert the results in to markdown."""
         lines = []
         # single bill
@@ -216,6 +228,7 @@ class CongressTui(App):
             if results.get('bill').get('cosponsors') is not None:
                 lines.append("")
                 lines.append(f"*Coponsors*: {results['bill']['cosponsors']['count']}")
+                cosponsor_list = await self.fetch_cosponsor_markdown(results['bill']['cosponsors']['url'], lines)
 
             # laws
             if results.get('bill').get('laws') is not None:
@@ -236,8 +249,9 @@ class CongressTui(App):
 
             # subjects
             if results.get('bill').get('subjects') is not None:
-                lines.append("")
-                lines.append(f"*Subjects*: {results['bill']['subjects']['count']}")
+                # lines.append("")
+                # lines.append(f"*Subjects*: {results['bill']['subjects']['count']}")
+                await self.fetch_subjects_markdown(results['bill']['subjects']['url'], lines)
 
             # constitutionalAuthorityStatementText
             if results.get('bill').get('constitutionalAuthorityStatementText') is not None:
@@ -270,9 +284,11 @@ class CongressTui(App):
                     lines.append(f"**Updated**: {result['updateDate']}")
                     lines.append("")
                     lines.append(
-                        f"**Lastest Action**: {result['latestAction']['text']} ({result['latestAction']['actionDate']})")
+                        f"**Latest Action**: {result['latestAction']['text']} ({result['latestAction']['actionDate']})")
                     lines.append("")
-                    lines.append(f"**Link**: {result['url']}")
+                    lines.append(f"[Details]({result['url']})")
+                    # lines.append("")
+                    # lines.append(f"**Link**: {result['url']}")
 
         return "\n".join(lines)
 
